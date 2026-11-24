@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HelloFixer — Reset Password</title>
+  <meta name="theme-color" content="#080b12">
+  <style>
+    :root { color-scheme: dark; --gold:#ffd400; --bg:#080b12; --panel:#111827; --muted:#aab4c5; }
+    * { box-sizing:border-box }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; padding:24px;
+      font:15px/1.5 "Segoe UI",Arial,sans-serif; color:#f5f7fb;
+      background:radial-gradient(ellipse at top,#202b43 0%,var(--bg) 58%); }
+    main { width:min(100%,440px); background:rgba(17,24,39,.96); border:1px solid #39445a;
+      border-radius:18px; padding:30px; box-shadow:0 20px 70px #0009; }
+    .brand { color:var(--gold); font-size:25px; font-weight:800; letter-spacing:.4px; }
+    h1 { margin:20px 0 8px; font-size:23px }
+    p { color:var(--muted); margin:0 0 20px }
+    label { display:block; margin:14px 0 6px; font-weight:600 }
+    input { width:100%; padding:13px 14px; border-radius:9px; border:1px solid #46536b;
+      background:#090f1b; color:white; font-size:15px; outline:none }
+    input:focus { border-color:var(--gold); box-shadow:0 0 0 3px #ffd40025 }
+    button { width:100%; margin-top:20px; padding:13px; border:0; border-radius:9px;
+      background:var(--gold); color:#171400; font-weight:800; font-size:15px; cursor:pointer }
+    button:hover { filter:brightness(1.08); transform:translateY(-1px) }
+    button:disabled { opacity:.55; cursor:wait; transform:none }
+    #status { margin-top:16px; padding:12px; border-radius:9px; display:none; white-space:pre-wrap }
+    #status.info { display:block; background:#17243a; color:#dce9ff }
+    #status.ok { display:block; background:#123323; color:#baf5d0 }
+    #status.err { display:block; background:#3b1820; color:#ffd0d6 }
+    .small { margin-top:18px; font-size:12px; color:#8f9bb0 }
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand">HELLOFIXER</div>
+  <h1>Set a new password</h1>
+  <p>Use this page after opening the password-reset email sent by HelloFixer.</p>
+
+  <form id="reset-form" hidden>
+    <label for="password">New password</label>
+    <input id="password" type="password" minlength="8" autocomplete="new-password" required>
+    <label for="confirm">Confirm new password</label>
+    <input id="confirm" type="password" minlength="8" autocomplete="new-password" required>
+    <button id="submit" type="submit">UPDATE PASSWORD</button>
+  </form>
+  <div id="status" role="status" aria-live="polite"></div>
+  <div class="small">If you did not request this change, close this page. Never share your reset link or password.</div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(() => {
+  // These are the project's public URL and publishable key.
+  // A publishable/anon key is intended for client-side use; never put a service-role key here.
+  const SUPABASE_URL = "https://jouxqhwhwckzhfslyaht.supabase.co";
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_iWnNBx1KTrQI7T-CDcvQMw_sKaUMkk0";
+
+  const statusBox = document.getElementById("status");
+  const form = document.getElementById("reset-form");
+  const submit = document.getElementById("submit");
+  const show = (message, kind="info") => {
+    statusBox.textContent = message;
+    statusBox.className = kind;
+  };
+
+  if (!window.supabase?.createClient) {
+    show("Could not load the authentication library. Check your internet connection and reload.", "err");
+    return;
+  }
+
+  const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
+
+  async function initialize() {
+    const url = new URL(window.location.href);
+    const error = url.searchParams.get("error_description") || url.searchParams.get("error");
+    if (error) {
+      show("This reset link is invalid or expired. Return to HelloFixer and request a new password-reset email.", "err");
+      return;
+    }
+
+    // supabase-js detects the recovery session from the email link URL/hash.
+    const { data, error: sessionError } = await client.auth.getSession();
+    if (sessionError || !data.session) {
+      show("No valid password-reset session was found. The link may have expired or already been used. Request a new reset email from HelloFixer.", "err");
+      return;
+    }
+
+    form.hidden = false;
+    show("Reset link verified. Enter your new password below.", "ok");
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const password = document.getElementById("password").value;
+    const confirm = document.getElementById("confirm").value;
+
+    if (password.length < 8) return show("Use a password with at least 8 characters.", "err");
+    if (password !== confirm) return show("The passwords do not match.", "err");
+
+    submit.disabled = true;
+    submit.textContent = "UPDATING...";
+    const { error } = await client.auth.updateUser({ password });
+    submit.disabled = false;
+    submit.textContent = "UPDATE PASSWORD";
+
+    if (error) {
+      show("Password update failed: " + error.message, "err");
+      return;
+    }
+
+    form.hidden = true;
+    show("Your password has been updated successfully. You can now return to HelloFixer and sign in with your new password.", "ok");
+    await client.auth.signOut();
+  });
+
+  initialize();
+})();
+</script>
+</body>
+</html>
